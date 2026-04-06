@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TipoUsuario {
+  cliente
+  proprietario
+  admin
+}
+
+enum StatusSemana {
+  disponivel
+  reservada
+  confirmada
+  encerrada
+}
+
+enum StatusReserva {
+  em_fila
+  prioritaria
+  em_analise
+  confirmada
+  cancelada
+}
+
+enum TipoTransacao {
+  entrada
+  saida
+}
+
+enum OrigemTransacao {
+  deposito
+  reserva
+  compra
+  indicacao
+  bonus
+  ajuste_admin
+}
+
+enum TipoReserva {
+  semana_completa
+  diaria
+}
+
+model Usuario {
+  id                      String    @id @default(uuid())
+  nome                    String
+  email                   String    @unique
+  senhaHash               String?   @map("senha_hash")
+  fotoUrl                 String?   @map("foto_url")
+  telefone                String?
+  tipo                    TipoUsuario @default(cliente)
+  saldoPontos             Int       @default(0) @map("saldo_pontos")
+  codigoIndicacao         String    @unique @map("codigo_indicacao")
+  indicadoPorId           String?   @map("indicado_por_id")
+  totalSemanasCadastradas Int       @default(0) @map("total_semanas_cadastradas")
+  idioma                  String    @default("pt-BR")
+  ativo                   Boolean   @default(true)
+  criadoEm               DateTime  @default(now()) @map("criado_em")
+
+  indicadoPor   Usuario?  @relation("Indicacoes", fields: [indicadoPorId], references: [id])
+  indicados     Usuario[] @relation("Indicacoes")
+  semanas       Semana[]
+  reservas      Reserva[]
+  transacoes    TransacaoPontos[]
+  avaliacoes    Avaliacao[]
+  diariasBonusPendentes DiariaBonusPendente[]
+
+  @@map("usuarios")
+}
+
+model DiariaBonusPendente {
+  id           String    @id @default(uuid())
+  usuarioId    String    @map("usuario_id")
+  semanasMarco Int       @map("semanas_marco")
+  local        String?
+  dataDiaria   DateTime? @map("data_diaria")
+  status       String    @default("pendente")
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("diarias_bonus_pendentes")
+}
+
+model Semana {
+  id                        String       @id @default(uuid())
+  proprietarioId            String?      @map("proprietario_id")
+  nomeResort                String       @map("nome_resort")
+  endereco                  String
+  cidade                    String
+  estado                    String       @db.Char(2)
+  pais                      String       @default("Brasil")
+  checkin                   DateTime
+  checkout                  DateTime
+  tipoApartamento           String       @map("tipo_apartamento")
+  capacidade                Int
+  fotos                     String[]
+  observacoes               String?
+  pontosSemana              Int          @map("pontos_semana")
+  pontosDiaria              Int          @map("pontos_diaria")
+  pontosProprietario        Int          @map("pontos_proprietario")
+  avaliacaoMedia            Decimal      @default(0) @map("avaliacao_media") @db.Decimal(3, 2)
+  totalAvaliacoes           Int          @default(0) @map("total_avaliacoes")
+  status                    StatusSemana @default(disponivel)
+  isFake                    Boolean      @default(false) @map("is_fake")
+  isSemanaOuro              Boolean      @default(false) @map("is_semana_ouro")
+  destaqueEncalhada         Boolean      @default(false) @map("destaque_encalhada")
+  contatoProprietarioNome   String       @map("contato_proprietario_nome")
+  contatoProprietarioEmail  String       @map("contato_proprietario_email")
+  contatoProprietarioTel    String       @map("contato_proprietario_tel")
+  criadoEm                  DateTime     @default(now()) @map("criado_em")
+
+  proprietario  Usuario?    @relation(fields: [proprietarioId], references: [id])
+  reservas      Reserva[]
+  avaliacoes    Avaliacao[]
+
+  @@map("semanas")
+}
+
+model Reserva {
+  id               String        @id @default(uuid())
+  semanaId         String        @map("semana_id")
+  clienteId        String        @map("cliente_id")
+  tipoReserva      TipoReserva   @map("tipo_reserva")
+  dataDiaria       DateTime?     @map("data_diaria")
+  pontosUtilizados Int           @map("pontos_utilizados")
+  isPrioritaria    Boolean       @default(false) @map("is_prioritaria")
+  taxaValor        Decimal?      @map("taxa_valor") @db.Decimal(10, 2)
+  taxaPagaEm       DateTime?     @map("taxa_paga_em")
+  asaasPaymentId   String?       @map("asaas_payment_id")
+  posicaoFila      Int           @default(1) @map("posicao_fila")
+  status           StatusReserva @default(em_fila)
+  termosAceitosEm  DateTime      @default(now()) @map("termos_aceitos_em")
+  confirmadaEm     DateTime?     @map("confirmada_em")
+  criadoEm         DateTime      @default(now()) @map("criado_em")
+
+  semana   Semana  @relation(fields: [semanaId], references: [id])
+  cliente  Usuario @relation(fields: [clienteId], references: [id])
+
+  @@map("reservas")
+}
+
+model TransacaoPontos {
+  id           String          @id @default(uuid())
+  usuarioId    String          @map("usuario_id")
+  tipo         TipoTransacao
+  quantidade   Int
+  descricao    String
+  origem       OrigemTransacao
+  referenciaId String?         @map("referencia_id")
+  criadoEm     DateTime        @default(now()) @map("criado_em")
+
+  usuario  Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("transacoes_pontos")
+}
+
+model Avaliacao {
+  id         String   @id @default(uuid())
+  semanaId   String   @map("semana_id")
+  usuarioId  String   @map("usuario_id")
+  nota       Int
+  comentario String?
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  semana   Semana  @relation(fields: [semanaId], references: [id])
+  usuario  Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([semanaId, usuarioId])
+  @@map("avaliacoes")
+}
+
+model ConfiguracaoAdmin {
+  chave     String  @id
+  valor     String
+  descricao String?
+
+  @@map("configuracoes_admin")
+}
