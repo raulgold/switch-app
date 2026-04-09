@@ -3,12 +3,25 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { lerValorBrutoEnv } from "@/lib/env-raw";
 
+function cleanConnectionString(url: string): string {
+  // Remove parâmetros que o pg não entende (ex: pgbouncer=true é só para o Prisma)
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete("pgbouncer");
+    parsed.searchParams.delete("connection_limit");
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 function createPrismaClient() {
   // Em produção (Vercel) não existe .env.local, então usamos DATABASE_URL diretamente.
-  // A senha na URL já está URL-encoded (SwItCh%40%24money), o que evita qualquer
-  // problema de interpolação com o caractere $ em process.env.
-  const connectionString =
+  // A senha na URL já está URL-encoded, o que evita qualquer problema de interpolação com $.
+  const rawUrl =
     lerValorBrutoEnv("DATABASE_URL") ?? process.env.DATABASE_URL;
+
+  const connectionString = rawUrl ? cleanConnectionString(rawUrl) : undefined;
 
   let pool: Pool;
 
