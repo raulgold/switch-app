@@ -3,31 +3,21 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { lerValorBrutoEnv } from "@/lib/env-raw";
 
-function cleanConnectionString(url: string): string {
-  // Remove parâmetros que o pg não entende (ex: pgbouncer=true é só para o Prisma)
-  try {
-    const parsed = new URL(url);
-    parsed.searchParams.delete("pgbouncer");
-    parsed.searchParams.delete("connection_limit");
-    return parsed.toString();
-  } catch {
-    return url;
-  }
-}
-
 function createPrismaClient() {
-  // Em produção (Vercel) não existe .env.local, então usamos DATABASE_URL diretamente.
-  // A senha na URL já está URL-encoded, o que evita qualquer problema de interpolação com $.
-  const rawUrl =
-    lerValorBrutoEnv("DATABASE_URL") ?? process.env.DATABASE_URL;
-
-  const connectionString = rawUrl ? cleanConnectionString(rawUrl) : undefined;
+  const rawUrl = lerValorBrutoEnv("DATABASE_URL") ?? process.env.DATABASE_URL;
 
   let pool: Pool;
 
-  if (connectionString) {
+  if (rawUrl) {
+    // Parsear a URL manualmente para evitar qualquer problema de encoding
+    // no pg-connection-string com caracteres especiais (@, $) na senha.
+    const u = new URL(rawUrl);
     pool = new Pool({
-      connectionString,
+      host: u.hostname,
+      port: parseInt(u.port || "5432", 10),
+      user: decodeURIComponent(u.username),
+      password: decodeURIComponent(u.password),
+      database: u.pathname.replace(/^\//, ""),
       ssl: { rejectUnauthorized: false },
       max: 10,
       idleTimeoutMillis: 30000,
@@ -36,7 +26,7 @@ function createPrismaClient() {
     // Fallback para vars individuais (dev sem DATABASE_URL)
     const host = lerValorBrutoEnv("DB_HOST") ?? process.env.DB_HOST!;
     const port = parseInt(
-      lerValorBrutoEnv("DB_PORT") ?? process.env.DB_PORT ?? "6543",
+      lerValorBrutoEnv("DB_PORT") ?? process.env.DB_PORT ?? "5432",
       10
     );
     const user = lerValorBrutoEnv("DB_USER") ?? process.env.DB_USER!;
