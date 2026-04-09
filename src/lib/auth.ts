@@ -55,11 +55,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async signIn({ user, account }) {
       // Criar usuário automático no primeiro login com Google
       if (account?.provider === "google" && user.email) {
-        const existente = await prisma.usuario.findUnique({
-          where: { email: user.email },
-        });
+        let existente;
+        try {
+          existente = await prisma.usuario.findUnique({
+            where: { email: user.email },
+          });
+        } catch (err) {
+          console.error("[auth] Erro ao consultar usuário no DB:", err);
+          throw err;
+        }
 
-        if (!existente) {
+        if (existente === null || existente === undefined) {
           let codigo = gerarCodigo();
           for (let i = 0; i < 10; i++) {
             const existe = await prisma.usuario.findUnique({ where: { codigoIndicacao: codigo } });
